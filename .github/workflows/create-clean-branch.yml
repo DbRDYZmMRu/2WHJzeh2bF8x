@@ -1,0 +1,32 @@
+name: Create clean branch (no LFS)
+
+on:
+  workflow_dispatch
+
+jobs:
+  clean-branch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create orphan clean branch and push only real files
+        env:
+          # Change this to whatever you want the clean branch to be called
+          CLEAN_BRANCH: clean-deploy
+        run: |
+          # 1. Clone ONLY the file tree — completely skip LFS and all history
+          GIT_LFS_SKIP_SMUDGE=1 git clone --depth 1 --no-checkout https://github.com/${{ github.repository }}.git .
+          GIT_LFS_SKIP_SMUDGE=1 git checkout main -- .
+
+          # 2. Create a brand-new orphan branch (zero history, zero LFS)
+          git checkout --orphan $CLEAN_BRANCH
+
+          # 3. Remove every possible trace of LFS and junk
+          git rm -rf --cached . 2>/dev/null || true
+          rm -rf .git/lfs .gitattributes .git* node_modules 2>/dev/null || true
+          find . -name ".gitattributes" -delete 2>/dev/null || true
+
+          # 4. Add back only the real files
+          git add -A
+
+          # 5. Commit and force-push the clean branch
+          git commit -m "Clean static site – no LFS, no history"
+          git push -f origin $CLEAN_BRANCH
