@@ -1,0 +1,78 @@
+# Simple workflow for deploying static content to GitHub Pages
+name: Deploy static content to Pages
+
+on:
+  # Runs on pushes targeting the default branch
+  push:
+    branches: ["main"]
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow only one concurrent deployment; cancel in-progress runs to prevent duplicates.
+concurrency:
+  group: "pages"
+  cancel-in-progress: true  # Updated: Cancels previous if new starts (safe for fast deploys)
+
+jobs:
+  # Single deploy job since we're just deploying
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      # Optimize Git for faster fetch (prevents hangs on large repos)
+      - name: Optimize Git for faster fetch
+        run: |
+          git config --global core.compression 0
+          git config --global http.postBuffer 1073741824  # 1GB buffer
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: false  # Disables recursive submodule fetching to bypass .gitmodules error
+          fetch-depth: 1     # Shallow clone: Only current commit
+          fetch-tags: false  # Skip tags to reduce fetch size
+          show-progress: false  # Hide progress logs for minor I/O savings
+          # Partial clone: Fetch structure only, blobs (files) on-demand during upload
+          filter: blob:none
+          # Sparse checkout: Non-cone mode for patterns (allows globs like *.html)
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |  # Safe patterns: Root files + common static (adjust based on your repo)
+            *
+            *.html
+            *.css
+            *.js
+            */  # All immediate subdirs (e.g., css/, js/, img/)
+
+      # Debug: List repo structure (run once, then remove this step after checking logs)
+      - name: Debug repo structure
+        run: |
+          echo "=== Root files ==="
+          ls -la .
+          echo "=== Subdirs (top level) ==="
+          find . -maxdepth 1 -type d
+          echo "=== File count ==="
+          find . -type f | wc -l
+          echo "=== Repo size ==="
+          du -sh .
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          # Upload entire repository (blobs fetch on-demand during this step)
+          path: '.'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
